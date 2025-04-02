@@ -1,0 +1,39 @@
+#:schema node_modules/wrangler/config-schema.json
+
+workers_dev = true
+name = "client-portal"
+compatibility_date = "2024-11-18"
+main = "./build/server/index.js"
+compatibility_flags = ["nodejs_als"]
+assets = { directory = "./build/client/" }
+account_id="43e0f88705b3e5332678850878b66fa3"
+
+services = [
+  { binding = "EMAIL_SERVICE", service = "service-emails" }
+]
+
+[observability]
+enabled = true
+
+[placement]
+mode = "smart"
+
+[vars]
+VALUE_FROM_CLOUDFLARE = "Hello from Cloudflare"
+
+[[r2_buckets]]
+binding = 'USER_PRIVATE'
+bucket_name = 'findmyskillbridge'
+
+
+[env.preview]
+services = [
+  { binding = "EMAIL_SERVICE", service = "service-emails-preview" }
+]
+
+[env.preview.vars]
+VALUE_FROM_CLOUDFLARE = "Hello from Cloudflare"
+
+[[env.preview.r2_buckets]]
+binding = 'USER_PRIVATE'
+bucket_name = 'findmyskillbridge'
