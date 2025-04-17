@@ -270,30 +270,31 @@ export default function MapScreen() {
   const infoSectionRef = React.useRef<HTMLDivElement>(null);
   const [measuredInfoBoxWidth, setMeasuredInfoBoxWidth] = React.useState(0);
 
+  const [isSidebarReady, setIsSidebarReady] = React.useState(false);
+
   React.useEffect(() => {
     const el = infoSectionRef.current;
-    console.log("infosection ref: ", infoSectionRef.current)
     if (!el) return;
-
-    const updateWidth = () => {
+  
+    const width = el.getBoundingClientRect().width;
+    if (width > 0) {
+      setIsSidebarReady(true);
+    }
+  
+    const observer = new ResizeObserver(() => {
       const width = el.getBoundingClientRect().width;
       if (width > 0) {
-        setMeasuredInfoBoxWidth(width);
+        setIsSidebarReady(true);
       }
-    };
-
-    updateWidth(); // Initial check
-
-    const observer = new ResizeObserver(updateWidth);
+    });
+  
     observer.observe(el);
-
     return () => observer.disconnect();
   }, []);
 
   React.useEffect(() => {
     const map = map_ref.current;
-    console.log("box width: ", measuredInfoBoxWidth);
-    if (!map || measuredInfoBoxWidth === 0) return;
+    if (!map || !isSidebarReady) return;
   
     if ("post" in open_pcs) {
       const selectedPost = pcs_posts.find((post) => post.id === open_pcs.post);
@@ -302,19 +303,21 @@ export default function MapScreen() {
           selectedPost.locations.map((location) => [
             location.data.coordinates.lat,
             location.data.coordinates.lng,
-          ]),
+          ])
         );
   
-        console.log("Fitting bounds with padding", measuredInfoBoxWidth);
+        const width = infoSectionRef.current?.getBoundingClientRect().width ?? 0;
+  
+        console.log("Running fitBounds with sidebar width:", width);
   
         map.fitBounds(bounds, {
-          paddingTopLeft: [measuredInfoBoxWidth + 32, 50], // Add extra buffer
-          paddingBottomRight: [50, 50],
+          paddingTopLeft: [width + 80, 80],
+          paddingBottomRight: [80, 80],
           animate: true,
         });
       }
     }
-  }, [open_pcs, pcs_posts, measuredInfoBoxWidth]);  
+  }, [isSidebarReady, open_pcs, pcs_posts]);    
 
   // React.useEffect(() => {
   //   const map = map_ref.current!;
