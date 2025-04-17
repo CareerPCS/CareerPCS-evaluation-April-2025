@@ -309,112 +309,27 @@ export default function MapScreen() {
     const postId = "post" in open_pcs ? open_pcs.post : null;
     if (!locationId && !postId) return;
   
-    // 💥 Prevent infinite loop: if we already handled this location/post, skip
     if (locationId && lastHandledLocationId.current === locationId) return;
     if (postId && lastHandledPostId.current === postId) return;
   
-    const roundZoom = (z: number) => Math.round(z * 100) / 100;
-  
-    const safearea_offsets = safearea.get();
+    const clusterGroup = pcs_cluster_ref.current;
     const offsets = {
-      ...safearea_offsets,
-      left: safearea_offsets.left + sidebarWidth,
+      ...safearea.get(),
+      left: safearea.get().left + sidebarWidth,
     };
   
-    const clusterGroup = pcs_cluster_ref.current;
+    const setHandledFn = () =>
+      setHandled(locationId, postId, lastHandledLocationId, lastHandledPostId);
   
-    // --- 📍 LOCATION logic with Offcenter ---
     if (locationId) {
       const marker = pcs_marker_refs.current[locationId];
-      if (!marker) return;
-  
-      const coords = marker.getLatLng();
-      const to: [number, number] = [coords.lat, coords.lng];
-      const bounds = Offcenter.getBounds(map, offsets);
-      const cluster = clusterGroup?.getVisibleParent(marker);
-  
-      if (cluster && cluster !== marker) {
-        // marker is part of a cluster
-        (async () => {
-          const currentZoom = map.getZoom();
-          const parent = marker.__parent as MarkerCluster;
-          const zoomies = parent._zoom as number;
-  
-          const targetZoom =
-            currentZoom >= 7 && parent.getChildCount() < 5
-              ? currentZoom
-              : clamp(zoomies + 1, Math.max(currentZoom, 8), map.getMaxZoom());
-  
-          const newZoom = roundZoom(targetZoom);
-          const center = map.getCenter();
-  
-          if (
-            newZoom !== roundZoom(currentZoom) ||
-            center.lat !== to[0] ||
-            center.lng !== to[1]
-          ) {
-            map.setView(
-              Offcenter.recenter(to, newZoom, offsets),
-              newZoom,
-              { animate: true }
-            );
-          }
-  
-          await Promise.race([
-            new Promise((resolve) => map.once("moveend zoomend", resolve)),
-            new Promise((resolve) => setTimeout(resolve, 500)),
-          ]);
-  
-          const clusterAgain = clusterGroup?.getVisibleParent(marker);
-          if (clusterAgain instanceof MarkerCluster) {
-            await new Promise((resolve) => setTimeout(resolve, 300));
-            clusterAgain.spiderfy();
-          }
-  
-          // ✅ Mark as handled
-          lastHandledLocationId.current = locationId;
-          lastHandledPostId.current = null;
-        })();
-      } else {
-        // visible marker — recenter if needed
-        if (!bounds.contains(coords)) {
-          const currentZoom = roundZoom(map.getZoom());
-          map.setView(
-            Offcenter.recenter(to, currentZoom, offsets),
-            currentZoom,
-            { animate: true, duration: 0.7 }
-          );
-        }
-  
-        // ✅ Mark as handled
-        lastHandledLocationId.current = locationId;
-        lastHandledPostId.current = null;
+      if (marker) {
+        handleLocation(map, locationId, marker, clusterGroup, offsets, setHandledFn);
       }
     }
   
-    // --- 📦 POST logic with fitBounds ---
-    else if (postId) {
-      const post = pcs_posts.find((p) => p.id === postId);
-      if (!post || post.locations.length === 0) return;
-  
-      const latlngs = post.locations.map((loc) => [
-        loc.data.coordinates.lat,
-        loc.data.coordinates.lng,
-      ]) as [number, number][];
-  
-      const bounds = new LatLngBounds(latlngs);
-  
-      console.log("🗺 fitBounds for post", postId, latlngs);
-  
-      map.fitBounds(bounds, {
-        paddingTopLeft: [sidebarWidth + 80, 80],
-        paddingBottomRight: [80, 80],
-        animate: true,
-      });
-  
-      // ✅ Mark as handled
-      lastHandledPostId.current = postId;
-      lastHandledLocationId.current = null;
+    if (postId) {
+      handlePost(map, postId, pcs_posts, sidebarWidth, setHandledFn);
     }
   }, [
     "location" in open_pcs && open_pcs.location,
@@ -422,8 +337,6 @@ export default function MapScreen() {
     sidebarWidth,
     pcs_posts,
   ]);
-  
-  
   
   
   const selected_location = React.useMemo<MapState["selected_location"]>(() => {
@@ -944,3 +857,127 @@ const PcsMarkers = ({
 };
 
 const PcsMarkersMemo = React.memo(PcsMarkers);
+
+const roundZoom = (z: number) => Math.round(z * 100) / 100;
+
+const setHandled = (
+  locationId: string | null,
+  postId: string | null,
+  locRef: React.RefObject<string | null>,
+  postRef: React.RefObject<string | null>
+) => {
+  locRef.current = locationId;
+  postRef.current = postId;
+};
+
+type Offsets = {
+  top: number;
+  left: number;
+  right: number;
+  bottom: number;
+};
+
+const handleLocation = async (
+  map: Map,
+  locationId: string,
+  marker: TMarker,
+  clusterGroup: TMarkerClusterGroup | null,
+  offsets: Offsets,
+  setHandledFn: () => void
+) => {
+  const coords = marker.getLatLng();
+  const center: [number, number] = [coords.lat, coords.lng];
+  const bounds = Offcenter.getBounds(map, offsets);
+  const cluster = clusterGroup?.getVisibleParent(marker);
+
+  if (cluster && cluster !== marker) {
+    const currentZoom = map.getZoom();
+    const parent = marker.__parent as MarkerCluster;
+    const clusterZoom = parent._zoom as number;
+
+    const targetZoom =
+      currentZoom >= 7 && parent.getChildCount() < 5
+        ? currentZoom
+        : clamp(clusterZoom + 1, Math.max(currentZoom, 8), map.getMaxZoom());
+
+    const newZoom = roundZoom(targetZoom);
+    const currentCenter = map.getCenter();
+
+    if (
+      newZoom !== roundZoom(currentZoom) ||
+      currentCenter.lat !== center[0] ||
+      currentCenter.lng !== center[1]
+    ) {
+      map.setView(
+        Offcenter.recenter(center, newZoom, offsets),
+        newZoom,
+        { animate: true }
+      );
+    }
+
+    await Promise.race([
+      new Promise((resolve) => map.once("moveend zoomend", resolve)),
+      new Promise((resolve) => setTimeout(resolve, 500)),
+    ]);
+
+    const finalCluster = clusterGroup?.getVisibleParent(marker);
+    if (finalCluster instanceof MarkerCluster) {
+      await new Promise((r) => setTimeout(r, 300));
+      finalCluster.spiderfy();
+    }
+
+    setHandledFn();
+  } else {
+    if (!bounds.contains(coords)) {
+      const currentZoom = roundZoom(map.getZoom());
+      map.setView(
+        Offcenter.recenter(center, currentZoom, offsets),
+        currentZoom,
+        { animate: true, duration: 0.7 }
+      );
+    }
+    setHandledFn();
+  }
+};
+
+export interface PostType {
+  id: string;
+  locations: {
+    id: string; // optional, but likely useful
+    data: {
+      coordinates: {
+        lat: number;
+        lng: number;
+      };
+    };
+  }[];
+}
+
+
+const handlePost = (
+  map: Map,
+  postId: string,
+  pcs_posts: PostType[],
+  sidebarWidth: number,
+  setHandledFn: () => void
+) => {
+  const post = pcs_posts.find((p) => p.id === postId);
+  if (!post || post.locations.length === 0) return;
+
+  const latlngs = post.locations.map((loc) => [
+    loc.data.coordinates.lat,
+    loc.data.coordinates.lng,
+  ]) as [number, number][];
+
+  const bounds = new LatLngBounds(latlngs);
+
+  console.log("🗺 fitBounds for post", postId, latlngs);
+
+  map.fitBounds(bounds, {
+    paddingTopLeft: [sidebarWidth + 80, 80],
+    paddingBottomRight: [80, 80],
+    animate: true,
+  });
+
+  setHandledFn();
+};
