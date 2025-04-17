@@ -291,33 +291,90 @@ export default function MapScreen() {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-  // setter to change map
+
   React.useEffect(() => {
     const map = map_ref.current;
     if (!map || !isSidebarReady) return;
   
-    if ("post" in open_pcs) {
-      const selectedPost = pcs_posts.find((post) => post.id === open_pcs.post);
+    const safearea_offsets = safearea.get();
+    const sidebarOffset = infoSectionRef.current?.getBoundingClientRect().width ?? 0;
+  
+    const combinedOffsets = {
+      ...safearea_offsets,
+      left: safearea_offsets.left + sidebarOffset,
+    };
+  
+    const refs =
+      "location" in open_pcs
+        ? {
+            cluster_group: pcs_cluster_ref.current,
+            marker: pcs_marker_refs.current[open_pcs.location!],
+          }
+        : null;
+  
+    if (refs && refs.marker) {
+      const { cluster_group, marker } = refs;
+      const coords = marker.getLatLng();
+      const to: [number, number] = [coords.lat, coords.lng];
+      const bounds = Offcenter.getBounds(map, combinedOffsets);
+      const cluster = cluster_group?.getVisibleParent(marker);
+  
+      if (cluster && cluster !== marker) {
+        async(async () => {
+          const parent = marker.__parent as MarkerCluster;
+          const zoomies = parent._zoom;
+          const newZoom =
+            map.getZoom() >= 7 && parent.getChildCount() < 5
+              ? map.getZoom()
+              : clamp(zoomies + 1, Math.max(map.getZoom(), 8), map.getMaxZoom());
+  
+          map.setView(Offcenter.recenter(to, newZoom, combinedOffsets), newZoom, {
+            animate: true,
+          });
+  
+          await Promise.race([
+            new Promise((resolve) => map.once("moveend zoomend", resolve)),
+            new Promise((resolve) => setTimeout(resolve, 500)),
+          ]);
+  
+          const clusterAgain = cluster_group?.getVisibleParent(marker);
+          if (clusterAgain instanceof MarkerCluster) {
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            clusterAgain.spiderfy();
+          }
+        });
+      } else {
+        if (!bounds.contains(coords)) {
+          map.setView(
+            Offcenter.recenter(to, map.getZoom(), combinedOffsets),
+            map.getZoom(),
+            { animate: true, duration: 0.7 }
+          );
+        }
+      }
+    } else if ("post" in open_pcs) {
+      const selectedPost = pcs_posts.find((p) => p.id === open_pcs.post);
       if (selectedPost && selectedPost.locations.length > 0) {
-        const bounds = new LatLngBounds(
-          selectedPost.locations.map((location) => [
-            location.data.coordinates.lat,
-            location.data.coordinates.lng,
-          ])
-        );
-  
-        const width = infoSectionRef.current?.getBoundingClientRect().width ?? 0;
-  
-        console.log("Running fitBounds with sidebar width:", width);
+        const locs = selectedPost.locations.map((l) => [
+          l.data.coordinates.lat,
+          l.data.coordinates.lng,
+        ]) as [number, number][];
+        const bounds = new LatLngBounds(locs);
   
         map.fitBounds(bounds, {
-          paddingTopLeft: [width + 80, 80],
+          paddingTopLeft: [sidebarOffset + 80, 80],
           paddingBottomRight: [80, 80],
           animate: true,
         });
       }
     }
-  }, [isSidebarReady, open_pcs, pcs_posts]);    
+  }, [
+    "location" in open_pcs && open_pcs.location,
+    "post" in open_pcs && open_pcs.post,
+    isSidebarReady,
+    pcs_posts,
+  ]);
+  
 
   const selected_location = React.useMemo<MapState["selected_location"]>(() => {
     if ("location" in open_pcs) {
