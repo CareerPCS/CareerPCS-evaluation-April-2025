@@ -271,7 +271,7 @@ export default function MapScreen() {
   const [measuredInfoBoxWidth, setMeasuredInfoBoxWidth] = React.useState(0);
 
   const [isSidebarReady, setIsSidebarReady] = React.useState(false);
-
+  // observer to get width
   React.useEffect(() => {
     const el = infoSectionRef.current;
     if (!el) return;
@@ -291,7 +291,7 @@ export default function MapScreen() {
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-
+  // setter to change map
   React.useEffect(() => {
     const map = map_ref.current;
     if (!map || !isSidebarReady) return;
@@ -318,99 +318,6 @@ export default function MapScreen() {
       }
     }
   }, [isSidebarReady, open_pcs, pcs_posts]);    
-
-  // React.useEffect(() => {
-  //   const map = map_ref.current!;
-
-  //   const refs =
-  //     "location" in open_pcs ?
-  //       {
-  //         cluster_group: pcs_cluster_ref.current,
-  //         marker: pcs_marker_refs.current[open_pcs.location!],
-  //       }
-  //     : null;
-
-  //   if (refs && map && refs.marker) {
-  //     const { cluster_group, marker } = refs;
-
-  //     const coordinates = marker.getLatLng();
-  //     const to = [coordinates.lat, coordinates.lng] as [number, number];
-
-  //     const safearea_offsets = safearea.get();
-  //     // let skillbridge = dod_locations.find((x) => x.id === open_location_id)!;
-  //     // let cluster_group = markers_ref.current;
-  //     // let marker = marker_refs.current[open_location_id];
-
-  //     const bounds = Offcenter.getBounds(map, safearea_offsets);
-
-  //     const cluster = cluster_group?.getVisibleParent(marker);
-  //     if (cluster != marker) {
-  //       // map.setView([skillbridge.location.LAT, skillbridge.location.LONG], 12);
-  //       // if (bounds.contains(to)) return;
-  //       // dod_cluster_ref.current.zoomToShowLayer(layer)
-
-  //       async(async () => {
-  //         const new_zoom = Math.max(12, map.getZoom());
-  //         if (!bounds.contains(to) || new_zoom !== map.getZoom()) {
-  //           // @ts-ignore
-  //           const uhhh = marker.__parent as MarkerCluster;
-  //           // @ts-ignore
-  //           const zoomies = uhhh._zoom as number;
-  //           const new_zoom =
-  //             (
-  //               (map.getZoom() >= 7 && uhhh.getChildCount() < 5) ||
-  //               map.getZoom() >= 9
-  //             ) ?
-  //               map.getZoom()
-  //             : clamp(
-  //                 zoomies + 1,
-  //                 Math.max(map.getZoom(), 8),
-  //                 map.getMaxZoom(),
-  //               );
-
-  //           map.setView(
-  //             Offcenter.recenter(to, new_zoom, safearea_offsets),
-  //             new_zoom,
-  //             {
-  //               animate: true,
-  //             },
-  //           );
-
-  //           await Promise.race([
-  //             new Promise((resolve) => {
-  //               map.once("moveend zoomend", () => resolve(undefined));
-  //             }),
-  //             new Promise((resolve) => {
-  //               setTimeout(resolve, 500);
-  //             }),
-  //           ]);
-  //         }
-
-  //         const cluster = cluster_group?.getVisibleParent(marker);
-  //         if (cluster instanceof MarkerCluster) {
-  //           const c = cluster as MarkerCluster;
-  //           await new Promise((resolve) => {
-  //             setTimeout(resolve, 300);
-  //           });
-  //           c.spiderfy();
-  //         } else {
-  //           /// pass
-  //         }
-  //       });
-  //     } else {
-  //       if (bounds.contains(coordinates)) return;
-
-  //       map.setView(
-  //         Offcenter.recenter(to, map.getZoom(), safearea_offsets),
-  //         map.getZoom(),
-  //         { animate: true, duration: 0.7 },
-  //       );
-  //     }
-  //   }
-  // }, [
-  //   "location" in open_pcs && open_pcs.location,
-  //   "post" in open_pcs && open_pcs.post,
-  // ]);
 
   const selected_location = React.useMemo<MapState["selected_location"]>(() => {
     if ("location" in open_pcs) {
