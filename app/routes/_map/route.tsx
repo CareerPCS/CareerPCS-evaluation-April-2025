@@ -127,7 +127,7 @@ const InvalidateMapOnRouteChange = () => {
   return null;
 };
 
-const MILE = 1609.34; // 50 miles in meters
+const MILE = 1609.34; // 1 mile in meters
 
 type PcsLocationLite = {
   id: string;
@@ -267,98 +267,147 @@ export default function MapScreen() {
   const open_pcs_3 = useMatch("/post/:post/*")?.params;
   const open_pcs = open_pcs_1 ?? open_pcs_2 ?? open_pcs_3 ?? ({} as any);
 
+  const infoSectionRef = React.useRef<HTMLDivElement>(null);
+  const [measuredInfoBoxWidth, setMeasuredInfoBoxWidth] = React.useState(0);
+
   React.useEffect(() => {
-    const map = map_ref.current!;
+    const el = infoSectionRef.current;
+    console.log("infosection ref: ", infoSectionRef.current)
+    if (!el) return;
 
-    const refs =
-      "location" in open_pcs ?
-        {
-          cluster_group: pcs_cluster_ref.current,
-          marker: pcs_marker_refs.current[open_pcs.location!],
-        }
-      : null;
+    const updateWidth = () => {
+      const width = el.getBoundingClientRect().width;
+      if (width > 0) {
+        setMeasuredInfoBoxWidth(width);
+      }
+    };
 
-    if (refs && map && refs.marker) {
-      const { cluster_group, marker } = refs;
+    updateWidth(); // Initial check
 
-      const coordinates = marker.getLatLng();
-      const to = [coordinates.lat, coordinates.lng] as [number, number];
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(el);
 
-      const safearea_offsets = safearea.get();
-      // let skillbridge = dod_locations.find((x) => x.id === open_location_id)!;
-      // let cluster_group = markers_ref.current;
-      // let marker = marker_refs.current[open_location_id];
+    return () => observer.disconnect();
+  }, []);
 
-      const bounds = Offcenter.getBounds(map, safearea_offsets);
-
-      const cluster = cluster_group?.getVisibleParent(marker);
-      if (cluster != marker) {
-        // map.setView([skillbridge.location.LAT, skillbridge.location.LONG], 12);
-        // if (bounds.contains(to)) return;
-        // dod_cluster_ref.current.zoomToShowLayer(layer)
-
-        async(async () => {
-          const new_zoom = Math.max(12, map.getZoom());
-          if (!bounds.contains(to) || new_zoom !== map.getZoom()) {
-            // @ts-ignore
-            const uhhh = marker.__parent as MarkerCluster;
-            // @ts-ignore
-            const zoomies = uhhh._zoom as number;
-            const new_zoom =
-              (
-                (map.getZoom() >= 7 && uhhh.getChildCount() < 5) ||
-                map.getZoom() >= 9
-              ) ?
-                map.getZoom()
-              : clamp(
-                  zoomies + 1,
-                  Math.max(map.getZoom(), 8),
-                  map.getMaxZoom(),
-                );
-
-            map.setView(
-              Offcenter.recenter(to, new_zoom, safearea_offsets),
-              new_zoom,
-              {
-                animate: true,
-              },
-            );
-
-            await Promise.race([
-              new Promise((resolve) => {
-                map.once("moveend zoomend", () => resolve(undefined));
-              }),
-              new Promise((resolve) => {
-                setTimeout(resolve, 500);
-              }),
-            ]);
-          }
-
-          const cluster = cluster_group?.getVisibleParent(marker);
-          if (cluster instanceof MarkerCluster) {
-            const c = cluster as MarkerCluster;
-            await new Promise((resolve) => {
-              setTimeout(resolve, 300);
-            });
-            c.spiderfy();
-          } else {
-            /// pass
-          }
-        });
-      } else {
-        if (bounds.contains(coordinates)) return;
-
-        map.setView(
-          Offcenter.recenter(to, map.getZoom(), safearea_offsets),
-          map.getZoom(),
-          { animate: true, duration: 0.7 },
+  React.useEffect(() => {
+    const map = map_ref.current;
+    console.log("box width: ", measuredInfoBoxWidth);
+    if (!map || measuredInfoBoxWidth === 0) return;
+  
+    if ("post" in open_pcs) {
+      const selectedPost = pcs_posts.find((post) => post.id === open_pcs.post);
+      if (selectedPost && selectedPost.locations.length > 0) {
+        const bounds = new LatLngBounds(
+          selectedPost.locations.map((location) => [
+            location.data.coordinates.lat,
+            location.data.coordinates.lng,
+          ]),
         );
+  
+        console.log("Fitting bounds with padding", measuredInfoBoxWidth);
+  
+        map.fitBounds(bounds, {
+          paddingTopLeft: [measuredInfoBoxWidth + 32, 50], // Add extra buffer
+          paddingBottomRight: [50, 50],
+          animate: true,
+        });
       }
     }
-  }, [
-    "location" in open_pcs && open_pcs.location,
-    "post" in open_pcs && open_pcs.post,
-  ]);
+  }, [open_pcs, pcs_posts, measuredInfoBoxWidth]);  
+
+  // React.useEffect(() => {
+  //   const map = map_ref.current!;
+
+  //   const refs =
+  //     "location" in open_pcs ?
+  //       {
+  //         cluster_group: pcs_cluster_ref.current,
+  //         marker: pcs_marker_refs.current[open_pcs.location!],
+  //       }
+  //     : null;
+
+  //   if (refs && map && refs.marker) {
+  //     const { cluster_group, marker } = refs;
+
+  //     const coordinates = marker.getLatLng();
+  //     const to = [coordinates.lat, coordinates.lng] as [number, number];
+
+  //     const safearea_offsets = safearea.get();
+  //     // let skillbridge = dod_locations.find((x) => x.id === open_location_id)!;
+  //     // let cluster_group = markers_ref.current;
+  //     // let marker = marker_refs.current[open_location_id];
+
+  //     const bounds = Offcenter.getBounds(map, safearea_offsets);
+
+  //     const cluster = cluster_group?.getVisibleParent(marker);
+  //     if (cluster != marker) {
+  //       // map.setView([skillbridge.location.LAT, skillbridge.location.LONG], 12);
+  //       // if (bounds.contains(to)) return;
+  //       // dod_cluster_ref.current.zoomToShowLayer(layer)
+
+  //       async(async () => {
+  //         const new_zoom = Math.max(12, map.getZoom());
+  //         if (!bounds.contains(to) || new_zoom !== map.getZoom()) {
+  //           // @ts-ignore
+  //           const uhhh = marker.__parent as MarkerCluster;
+  //           // @ts-ignore
+  //           const zoomies = uhhh._zoom as number;
+  //           const new_zoom =
+  //             (
+  //               (map.getZoom() >= 7 && uhhh.getChildCount() < 5) ||
+  //               map.getZoom() >= 9
+  //             ) ?
+  //               map.getZoom()
+  //             : clamp(
+  //                 zoomies + 1,
+  //                 Math.max(map.getZoom(), 8),
+  //                 map.getMaxZoom(),
+  //               );
+
+  //           map.setView(
+  //             Offcenter.recenter(to, new_zoom, safearea_offsets),
+  //             new_zoom,
+  //             {
+  //               animate: true,
+  //             },
+  //           );
+
+  //           await Promise.race([
+  //             new Promise((resolve) => {
+  //               map.once("moveend zoomend", () => resolve(undefined));
+  //             }),
+  //             new Promise((resolve) => {
+  //               setTimeout(resolve, 500);
+  //             }),
+  //           ]);
+  //         }
+
+  //         const cluster = cluster_group?.getVisibleParent(marker);
+  //         if (cluster instanceof MarkerCluster) {
+  //           const c = cluster as MarkerCluster;
+  //           await new Promise((resolve) => {
+  //             setTimeout(resolve, 300);
+  //           });
+  //           c.spiderfy();
+  //         } else {
+  //           /// pass
+  //         }
+  //       });
+  //     } else {
+  //       if (bounds.contains(coordinates)) return;
+
+  //       map.setView(
+  //         Offcenter.recenter(to, map.getZoom(), safearea_offsets),
+  //         map.getZoom(),
+  //         { animate: true, duration: 0.7 },
+  //       );
+  //     }
+  //   }
+  // }, [
+  //   "location" in open_pcs && open_pcs.location,
+  //   "post" in open_pcs && open_pcs.post,
+  // ]);
 
   const selected_location = React.useMemo<MapState["selected_location"]>(() => {
     if ("location" in open_pcs) {
@@ -567,7 +616,7 @@ export default function MapScreen() {
 
           <div className="pointer-events-none absolute inset-0 flex flex-col-reverse justify-start overflow-hidden md:flex-row">
             <div className="pointer-events-auto contents">
-              <Outlet />
+              <Outlet context={{ infoSectionRef }}/>
             </div>
             <div
               className="absolute inset-0 m-4 md:static md:inset-auto md:flex-1"
