@@ -22,7 +22,8 @@ export default function PostPage({
   params,
 }: Route.ComponentProps) {
   const { infoSectionRef, setSidebarWidth } = useOutletContext<{ infoSectionRef: React.RefObject<HTMLDivElement>; setSidebarWidth:(w:number) => void; }>();
-
+  
+  // observer needs to be here to set the width
   React.useEffect(() => {
     const el = infoSectionRef.current;
     if (!el) return;
@@ -43,7 +44,7 @@ export default function PostPage({
 
   return (
     <section
-      ref={infoSectionRef} // ← ✅ Attach the ref here
+      ref={infoSectionRef}
       className="z-50 flex max-h-[60%] flex-col rounded-t-2xl bg-white md:m-4 md:max-h-none md:w-[50%] md:max-w-prose md:min-w-[300px] md:rounded-2xl"
       style={{
         boxShadow: "0 0 2px rgb(0 0 0/20%),0 -1px 0 rgb(0 0 0/2%)",

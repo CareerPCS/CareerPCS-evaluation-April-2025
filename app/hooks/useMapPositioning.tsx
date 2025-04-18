@@ -55,26 +55,16 @@ export function useMapPositioning({
     const lastHandledLocationId = useRef<string | null>(null);
   
     useEffect(() => {
-        if (!map || !sidebarWidth || !offsets) {
-          console.log("🚫 Bailing: map not ready", { map, offsets, sidebarWidth });
-          return;
-        }
+        if (!map || !sidebarWidth || !offsets) return;
       
         // Skip if nothing is selected
-        if (!postId && !locationId) {
-          console.log("❌ No post or location selected");
-          return;
-        }
+        if (!postId && !locationId) return;
       
-        // Skip if we've already handled this post or location
-        if (postId && lastHandledPostId.current === postId) {
-          console.log("⏭️ Already handled post", postId);
-          return;
-        }
-        if (locationId && lastHandledLocationId.current === locationId) {
-          console.log("⏭️ Already handled location", locationId);
-          return;
-        }
+        // Skip if we've already handled this post
+        if (postId && lastHandledPostId.current === postId) return;
+        
+        // skip if we've already handled this location
+        if (locationId && lastHandledLocationId.current === locationId) return;
       
         const setHandled = () => {
           if (postId) lastHandledPostId.current = postId;
@@ -114,7 +104,7 @@ const handlePost = (map: Map, postId: string, pcs_posts: PostType[], sidebarWidt
   
       const bounds = new LatLngBounds(locs);
       console.log("🗺 Fit bounds for post:", postId, bounds);
-  
+      //This is where the map adjustment is happening using the dynamic sidebar width info
       map.fitBounds(bounds, {
         paddingTopLeft: [sidebarWidth + 80, 80],
         paddingBottomRight: [80, 80],
@@ -122,7 +112,7 @@ const handlePost = (map: Map, postId: string, pcs_posts: PostType[], sidebarWidt
       });
     }
   
-    setHandled();  // Mark as handled
+    setHandled();
   };
   
 

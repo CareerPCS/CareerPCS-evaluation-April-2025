@@ -263,9 +263,6 @@ export default function MapScreen() {
   const open_pcs = open_pcs_1 ?? open_pcs_2 ?? open_pcs_3 ?? ({} as any);
 
   const infoSectionRef = React.useRef<HTMLDivElement>(null);
-  const [measuredInfoBoxWidth, setMeasuredInfoBoxWidth] = React.useState(0);
-
-  const [isSidebarReady, setIsSidebarReady] = React.useState(false);
 
   const locationId = "location" in open_pcs ? open_pcs.location : null;
   const postId = "post" in open_pcs ? open_pcs.post : null;
@@ -273,9 +270,7 @@ export default function MapScreen() {
   const [sidebarWidth, setSidebarWidth] = React.useState(0);
   const [mapTriggerKey, setMapTriggerKey] = React.useState(0);
 
-  const [user_location, set_user_location] = React.useState<
-    [number, number] | null
-  >(null);
+  const [user_location, set_user_location] = React.useState<[number, number] | null>(null);
   
   const safearea = useDralSafearea();
 
@@ -290,13 +285,10 @@ export default function MapScreen() {
   
   React.useEffect(() => {
     if (sidebarWidth > 0 && safearea.ready) {
-      console.log("🚀 Triggering map positioning because postId/locationId changed.");
-      setMapTriggerKey((k) => k + 1); // Increment to trigger re-run
+      setMapTriggerKey((k) => k + 1);
     }
   }, [sidebarWidth, safearea.ready, open_pcs.post, open_pcs.location]);
 
-  console.log("📦 sidebarWidth", sidebarWidth);
-  console.log("📦 safearea.ready", safearea.ready);
 
   useMapPositioning({
     map: map_ref.current,
@@ -805,7 +797,7 @@ const PcsMarkers = ({
       cluster.setIcon(createClusterIcon(cluster));
     };
   }, [mapstate$]);
-  const clusterRef = React.useRef<typeof MarkerClusterGroup | null>(null);
+
   return (
     <MarkerClusterGroup chunkedLoading ref={internal_cluster_ref}>
       {posts.map((location, index) => (
