@@ -120,7 +120,8 @@ type Offsets = {
     const bounds = new LatLngBounds(latlngs);
   
     console.log("🗺 fitBounds for post", postId, latlngs);
-  
+    // This is the main change that effects the map - sidebarWidth
+    // is used to calculate the bounds of the map
     map.fitBounds(bounds, {
       paddingTopLeft: [sidebarWidth + 80, 80],
       paddingBottomRight: [80, 80],

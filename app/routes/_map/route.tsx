@@ -267,16 +267,14 @@ export default function MapScreen() {
   const open_pcs_3 = useMatch("/post/:post/*")?.params;
   const open_pcs = open_pcs_1 ?? open_pcs_2 ?? open_pcs_3 ?? ({} as any);
 
+  // get width of the info sidebar
   const infoSectionRef = React.useRef<HTMLDivElement>(null);
-  const [measuredInfoBoxWidth, setMeasuredInfoBoxWidth] = React.useState(0);
-
-  const [isSidebarReady, setIsSidebarReady] = React.useState(false);
+  const [sidebarWidth, setSidebarWidth] = React.useState(0);
 
   const locationId = "location" in open_pcs ? open_pcs.location : null;
   const postId = "post" in open_pcs ? open_pcs.post : null;
 
-  const [sidebarWidth, setSidebarWidth] = React.useState(0);
-
+  // observer to watch changes in sidebar width
   React.useEffect(() => {
     const el = infoSectionRef.current;
     if (!el) return;
@@ -317,7 +315,7 @@ export default function MapScreen() {
       ...safearea.get(),
       left: safearea.get().left + sidebarWidth,
     };
-  
+    // for clarity so as not to pass () => setHandled(...) with so many params
     const setHandledFn = () =>
       setHandled(locationId, postId, lastHandledLocationId, lastHandledPostId);
   
