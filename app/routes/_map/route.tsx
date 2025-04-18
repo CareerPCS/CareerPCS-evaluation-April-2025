@@ -3,7 +3,6 @@ import type {
   Marker as TMarker,
   MarkerClusterGroup as TMarkerClusterGroup,
 } from "leaflet";
-import { clamp } from "lodash-es";
 import { EllipsisIcon, MapIcon } from "lucide-react";
 import React, { useImperativeHandle } from "react";
 import type { LoaderFunctionArgs } from "react-router";
@@ -48,6 +47,7 @@ import {
 import { useDralSafearea } from "./DralSafearea";
 import { createClusterIcon, createHighlightedClusterIcon } from "./Markers";
 import PinIcon from "./icons/PinIcon";
+import { useMapPositioning } from "~/hooks/useMapPositioning";
 
 import tailwind_url from "~/app.css?url";
 
@@ -190,6 +190,7 @@ const async = async async => async()
 
 export default function MapScreen() {
   const { companies, locations, posts } = useLoaderData<typeof loader>();
+  const mapRef = React.useRef<Map | null>(null);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -250,12 +251,6 @@ export default function MapScreen() {
     });
   }, [pcs_posts, map_bounds]);
 
-  const safearea = useDralSafearea();
-
-  const [user_location, set_user_location] = React.useState<
-    [number, number] | null
-  >(null);
-
   const map_ref = React.useRef<Map>(null);
   const pcs_cluster_ref = React.useRef<TMarkerClusterGroup>(null as any);
   const pcs_marker_refs = React.useRef<{ [id: string]: TMarker }>({});
@@ -276,68 +271,45 @@ export default function MapScreen() {
   const postId = "post" in open_pcs ? open_pcs.post : null;
 
   const [sidebarWidth, setSidebarWidth] = React.useState(0);
+  const [mapTriggerKey, setMapTriggerKey] = React.useState(0);
 
-  React.useEffect(() => {
-    const el = infoSectionRef.current;
-    if (!el) return;
+  const [user_location, set_user_location] = React.useState<
+    [number, number] | null
+  >(null);
   
-    // measure immediately (so first click works)
-    const measure = () => {
-      const width = el.getBoundingClientRect().width;
-      if (width > 0) {
-        console.log("✅ Sidebar measured:", width);
-        setSidebarWidth(width);
-      }
+  const safearea = useDralSafearea();
+
+  const combinedOffsets = React.useMemo(() => {
+    if (!safearea.ready) return null;
+    const base = safearea.get();
+    return {
+      ...base,
+      left: base.left + sidebarWidth,
     };
-  
-    measure();
-  
-    const obs = new ResizeObserver(measure);
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [infoSectionRef.current]);
-  
-  
-  const lastHandledLocationId = React.useRef<string | null>(null);
-  const lastHandledPostId = React.useRef<string | null>(null);
+  }, [safearea.ready, sidebarWidth]);
   
   React.useEffect(() => {
-    const map = map_ref.current;
-    if (!map || !sidebarWidth) return;
-  
-    const locationId = "location" in open_pcs ? open_pcs.location : null;
-    const postId = "post" in open_pcs ? open_pcs.post : null;
-    if (!locationId && !postId) return;
-  
-    if (locationId && lastHandledLocationId.current === locationId) return;
-    if (postId && lastHandledPostId.current === postId) return;
-  
-    const clusterGroup = pcs_cluster_ref.current;
-    const offsets = {
-      ...safearea.get(),
-      left: safearea.get().left + sidebarWidth,
-    };
-  
-    const setHandledFn = () =>
-      setHandled(locationId, postId, lastHandledLocationId, lastHandledPostId);
-  
-    if (locationId) {
-      const marker = pcs_marker_refs.current[locationId];
-      if (marker) {
-        handleLocation(map, locationId, marker, clusterGroup, offsets, setHandledFn);
-      }
+    if (sidebarWidth > 0 && safearea.ready) {
+      console.log("🚀 Triggering map positioning because postId/locationId changed.");
+      setMapTriggerKey((k) => k + 1); // Increment to trigger re-run
     }
-  
-    if (postId) {
-      handlePost(map, postId, pcs_posts, sidebarWidth, setHandledFn);
-    }
-  }, [
-    "location" in open_pcs && open_pcs.location,
-    "post" in open_pcs && open_pcs.post,
+  }, [sidebarWidth, safearea.ready, open_pcs.post, open_pcs.location]);
+
+  console.log("📦 sidebarWidth", sidebarWidth);
+  console.log("📦 safearea.ready", safearea.ready);
+
+  useMapPositioning({
+    map: map_ref.current,
+    postId: open_pcs.post,
+    locationId: "location" in open_pcs ? open_pcs.location : null,
     sidebarWidth,
+    offsets: combinedOffsets,
     pcs_posts,
-  ]);
-  
+    markerRefs: pcs_marker_refs.current,
+    clusterGroup: pcs_cluster_ref.current,
+    triggerKey: mapTriggerKey.toString(),
+  });
+
   
   const selected_location = React.useMemo<MapState["selected_location"]>(() => {
     if ("location" in open_pcs) {
@@ -546,7 +518,7 @@ export default function MapScreen() {
 
           <div className="pointer-events-none absolute inset-0 flex flex-col-reverse justify-start overflow-hidden md:flex-row">
             <div className="pointer-events-auto contents">
-              <Outlet context={{ infoSectionRef }}/>
+              <Outlet context={{ infoSectionRef, setSidebarWidth }}/>
             </div>
             <div
               className="absolute inset-0 m-4 md:static md:inset-auto md:flex-1"
@@ -833,7 +805,7 @@ const PcsMarkers = ({
       cluster.setIcon(createClusterIcon(cluster));
     };
   }, [mapstate$]);
-
+  const clusterRef = React.useRef<typeof MarkerClusterGroup | null>(null);
   return (
     <MarkerClusterGroup chunkedLoading ref={internal_cluster_ref}>
       {posts.map((location, index) => (
@@ -857,127 +829,3 @@ const PcsMarkers = ({
 };
 
 const PcsMarkersMemo = React.memo(PcsMarkers);
-
-const roundZoom = (z: number) => Math.round(z * 100) / 100;
-
-const setHandled = (
-  locationId: string | null,
-  postId: string | null,
-  locRef: React.RefObject<string | null>,
-  postRef: React.RefObject<string | null>
-) => {
-  locRef.current = locationId;
-  postRef.current = postId;
-};
-
-type Offsets = {
-  top: number;
-  left: number;
-  right: number;
-  bottom: number;
-};
-
-const handleLocation = async (
-  map: Map,
-  locationId: string,
-  marker: TMarker,
-  clusterGroup: TMarkerClusterGroup | null,
-  offsets: Offsets,
-  setHandledFn: () => void
-) => {
-  const coords = marker.getLatLng();
-  const center: [number, number] = [coords.lat, coords.lng];
-  const bounds = Offcenter.getBounds(map, offsets);
-  const cluster = clusterGroup?.getVisibleParent(marker);
-
-  if (cluster && cluster !== marker) {
-    const currentZoom = map.getZoom();
-    const parent = marker.__parent as MarkerCluster;
-    const clusterZoom = parent._zoom as number;
-
-    const targetZoom =
-      currentZoom >= 7 && parent.getChildCount() < 5
-        ? currentZoom
-        : clamp(clusterZoom + 1, Math.max(currentZoom, 8), map.getMaxZoom());
-
-    const newZoom = roundZoom(targetZoom);
-    const currentCenter = map.getCenter();
-
-    if (
-      newZoom !== roundZoom(currentZoom) ||
-      currentCenter.lat !== center[0] ||
-      currentCenter.lng !== center[1]
-    ) {
-      map.setView(
-        Offcenter.recenter(center, newZoom, offsets),
-        newZoom,
-        { animate: true }
-      );
-    }
-
-    await Promise.race([
-      new Promise((resolve) => map.once("moveend zoomend", resolve)),
-      new Promise((resolve) => setTimeout(resolve, 500)),
-    ]);
-
-    const finalCluster = clusterGroup?.getVisibleParent(marker);
-    if (finalCluster instanceof MarkerCluster) {
-      await new Promise((r) => setTimeout(r, 300));
-      finalCluster.spiderfy();
-    }
-
-    setHandledFn();
-  } else {
-    if (!bounds.contains(coords)) {
-      const currentZoom = roundZoom(map.getZoom());
-      map.setView(
-        Offcenter.recenter(center, currentZoom, offsets),
-        currentZoom,
-        { animate: true, duration: 0.7 }
-      );
-    }
-    setHandledFn();
-  }
-};
-
-export interface PostType {
-  id: string;
-  locations: {
-    id: string; // optional, but likely useful
-    data: {
-      coordinates: {
-        lat: number;
-        lng: number;
-      };
-    };
-  }[];
-}
-
-
-const handlePost = (
-  map: Map,
-  postId: string,
-  pcs_posts: PostType[],
-  sidebarWidth: number,
-  setHandledFn: () => void
-) => {
-  const post = pcs_posts.find((p) => p.id === postId);
-  if (!post || post.locations.length === 0) return;
-
-  const latlngs = post.locations.map((loc) => [
-    loc.data.coordinates.lat,
-    loc.data.coordinates.lng,
-  ]) as [number, number][];
-
-  const bounds = new LatLngBounds(latlngs);
-
-  console.log("🗺 fitBounds for post", postId, latlngs);
-
-  map.fitBounds(bounds, {
-    paddingTopLeft: [sidebarWidth + 80, 80],
-    paddingBottomRight: [80, 80],
-    animate: true,
-  });
-
-  setHandledFn();
-};
