@@ -49,52 +49,33 @@ export function useMapPositioning({
     pcs_posts,
     markerRefs,
     clusterGroup,
-    triggerKey,
-  }: UseMapPositioningProps & { offsets: Offsets | null }) {
+    triggerKey, // We use triggerKey to re-run the logic when anything changes
+  }: UseMapPositioningProps) {
     const lastHandledPostId = useRef<string | null>(null);
     const lastHandledLocationId = useRef<string | null>(null);
   
-    // ✅ Reset lastHandled when postId or locationId changes
     useEffect(() => {
-        // Reset handled state when postId or locationId changes
-        if (postId && lastHandledPostId.current !== postId) {
-          console.log("💥 Resetting post logic for post", postId);
-          lastHandledPostId.current = postId;
-        }
-      
-        // Reset locationId if postId is set
-        if (locationId && lastHandledLocationId.current !== locationId) {
-          console.log("💥 Resetting location logic for location", locationId);
-          lastHandledLocationId.current = locationId;
-        }
-      }, [postId, locationId]);
-
-      useEffect(() => {
-        console.log("🪝 useEffect inside useMapPositioning triggered", triggerKey);
-      
-        // Bail out early if the map is not ready, sidebarWidth is invalid, or offsets are null
         if (!map || !sidebarWidth || !offsets) {
           console.log("🚫 Bailing: map not ready", { map, offsets, sidebarWidth });
           return;
         }
       
+        // Skip if nothing is selected
         if (!postId && !locationId) {
           console.log("❌ No post or location selected");
           return;
         }
       
-        // Reset handled state when postId or locationId changes
-        if (postId && lastHandledPostId.current !== postId) {
-          console.log("💥 Resetting post logic for post", postId);
-          lastHandledPostId.current = postId;
+        // Skip if we've already handled this post or location
+        if (postId && lastHandledPostId.current === postId) {
+          console.log("⏭️ Already handled post", postId);
+          return;
+        }
+        if (locationId && lastHandledLocationId.current === locationId) {
+          console.log("⏭️ Already handled location", locationId);
+          return;
         }
       
-        if (locationId && lastHandledLocationId.current !== locationId) {
-          console.log("💥 Resetting location logic for location", locationId);
-          lastHandledLocationId.current = locationId;
-        }
-      
-        // Only run map logic if the postId or locationId has changed
         const setHandled = () => {
           if (postId) lastHandledPostId.current = postId;
           if (locationId) lastHandledLocationId.current = locationId;
@@ -104,6 +85,7 @@ export function useMapPositioning({
         if (locationId) {
           const marker = markerRefs[locationId];
           if (marker) {
+            console.log("📍 Centering on location", locationId);
             handleLocation(map, locationId, marker, clusterGroup, offsets, setHandled);
             return;
           }
@@ -111,11 +93,12 @@ export function useMapPositioning({
       
         // Handle post logic
         if (postId) {
-          console.log("🏞 Running map logic for post", postId);
+          console.log("📝 Centering on post", postId);
           handlePost(map, postId, pcs_posts, sidebarWidth, setHandled);
         }
-      }, [triggerKey, map, postId, locationId, sidebarWidth, offsets, pcs_posts, markerRefs, clusterGroup]);        
-}
+      }, [map, postId, locationId, sidebarWidth, offsets, pcs_posts, markerRefs, clusterGroup]);      
+  }
+  
 
 // --- Helpers ---
 
@@ -139,7 +122,7 @@ const handlePost = (map: Map, postId: string, pcs_posts: PostType[], sidebarWidt
       });
     }
   
-    setHandled();  // Update the handled state once map logic is done
+    setHandled();  // Mark as handled
   };
   
 
