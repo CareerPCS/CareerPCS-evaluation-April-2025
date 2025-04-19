@@ -268,23 +268,26 @@ export default function MapScreen() {
   const open_pcs = open_pcs_1 ?? open_pcs_2 ?? open_pcs_3 ?? ({} as any);
 
   const infoSectionRef = React.useRef<HTMLDivElement>(null);
+  const didInitialRecenter = React.useRef(false);
 
+
+  const [sidebarReady, setSidebarReady] = React.useState(false);
   const [sidebarWidth, setSidebarWidth] = React.useState(0);
-
+  
   React.useEffect(() => {
     const el = infoSectionRef.current;
     if (!el) return;
-
+  
     const measure = () => {
       const width = el.getBoundingClientRect().width;
       if (width > 0) {
-        console.log("✅ Sidebar measured:", width);
         setSidebarWidth(width);
+        setSidebarReady(true);
+        console.log("✅ Sidebar measured:", width);
       }
     };
-
-    measure(); // measure immediately
-
+  
+    measure(); // immediate attempt
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
@@ -294,10 +297,11 @@ export default function MapScreen() {
   React.useEffect(() => {
     const map = map_ref.current!;
     if (!map) {
-      console.warn("⛔ map_ref.current is null, skipping fitBounds");
+      console.warn("⛔ map_ref.current is null, skipping recenter");
       return;
     }
-    const safearea_offsets = safearea.get();
+  
+    const combinedOffsets = safearea.get();
   
     const refs =
       "location" in open_pcs
@@ -307,78 +311,82 @@ export default function MapScreen() {
           }
         : null;
   
-    if (refs && map && refs.marker) {
+    if (refs && refs.marker) {
       const { cluster_group, marker } = refs;
+      const coords = marker.getLatLng();
+      const to: [number, number] = [coords.lat, coords.lng];
   
-      const coordinates = marker.getLatLng();
-      const to = [coordinates.lat, coordinates.lng] as [number, number];
-  
-      const bounds = Offcenter.getBounds(map, safearea_offsets);
-      const cluster = cluster_group?.getVisibleParent(marker);
+      const bounds = Offcenter.getBounds(map, combinedOffsets);
+      const cluster = cluster_group.getVisibleParent(marker);
   
       if (cluster !== marker) {
-        async(async () => {
-          const new_zoom = Math.max(12, map.getZoom());
-          if (!bounds.contains(to) || new_zoom !== map.getZoom()) {
-            const parent = marker.__parent as MarkerCluster;
-            const zoomies = parent._zoom;
-            const adjustedZoom =
-              (map.getZoom() >= 7 && parent.getChildCount() < 5) ||
-              map.getZoom() >= 9
-                ? map.getZoom()
-                : clamp(
-                    zoomies + 1,
-                    Math.max(map.getZoom(), 8),
-                    map.getMaxZoom()
-                  );
+        (async () => {
+          const parent = marker.__parent as MarkerCluster;
+          const zoomies = parent._zoom;
+          const adjustedZoom =
+            (map.getZoom() >= 7 && parent.getChildCount() < 5) ||
+            map.getZoom() >= 9
+              ? map.getZoom()
+              : clamp(
+                  zoomies + 1,
+                  Math.max(map.getZoom(), 8),
+                  map.getMaxZoom()
+                );
   
-            map.setView(
-              Offcenter.recenter(to, adjustedZoom, safearea_offsets),
-              adjustedZoom,
-              { animate: true }
-            );
+          map.setView(
+            Offcenter.recenter(to, adjustedZoom, combinedOffsets),
+            adjustedZoom,
+            { animate: true }
+          );
   
-            await Promise.race([
-              new Promise((resolve) =>
-                map.once("moveend zoomend", () => resolve(undefined))
-              ),
-              new Promise((resolve) => setTimeout(resolve, 500)),
-            ]);
+          await Promise.race([
+            new Promise((res) => map.once("moveend zoomend", res)),
+            new Promise((res) => setTimeout(res, 500)),
+          ]);
+  
+          const again = cluster_group.getVisibleParent(marker);
+          if (again instanceof MarkerCluster) {
+            await new Promise((r) => setTimeout(r, 300));
+            again.spiderfy();
           }
-  
-          const clusterAgain = cluster_group?.getVisibleParent(marker);
-          if (clusterAgain instanceof MarkerCluster) {
-            await new Promise((resolve) => setTimeout(resolve, 300));
-            clusterAgain.spiderfy();
-          }
-        });
+        })();
       } else {
-        if (bounds.contains(coordinates)) return;
-  
-        map.setView(
-          Offcenter.recenter(to, map.getZoom(), safearea_offsets),
-          map.getZoom(),
-          { animate: true, duration: 0.7 }
-        );
+        if (!bounds.contains(coords)) {
+          map.setView(
+            Offcenter.recenter(to, map.getZoom(), combinedOffsets),
+            map.getZoom(),
+            { animate: true, duration: 0.7 }
+          );
+        }
       }
     }
   
     if ("post" in open_pcs) {
-      const selectedPost = pcs_posts.find((post) => post.id === open_pcs.post);
+      const selectedPost = pcs_posts.find((p) => p.id === open_pcs.post);
       if (selectedPost && selectedPost.locations.length > 0) {
         const bounds = new LatLngBounds(
-          selectedPost.locations.map((location) => [
-            location.data.coordinates.lat,
-            location.data.coordinates.lng,
+          selectedPost.locations.map((loc) => [
+            loc.data.coordinates.lat,
+            loc.data.coordinates.lng,
           ])
         );
   
-        Offcenter.fitBounds(map, bounds, safearea_offsets, sidebarWidth);
+        const zoom = Offcenter.zoomToFitBounds(map, bounds, combinedOffsets);
+        if (zoom !== undefined) {
+          const center = bounds.getCenter();
+          const recentered = Offcenter.recenter(
+            [center.lat, center.lng],
+            zoom,
+            combinedOffsets
+          );
+          map.setView(recentered, zoom, { animate: true });
+        }
       }
     }
   }, [
     "location" in open_pcs && open_pcs.location,
     "post" in open_pcs && open_pcs.post,
+    sidebarWidth,
   ]);
   
 
