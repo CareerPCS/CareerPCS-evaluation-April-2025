@@ -270,7 +270,7 @@ export default function MapScreen() {
   const infoSectionRef = React.useRef<HTMLDivElement>(null);
 
   const [sidebarWidth, setSidebarWidth] = React.useState(0);
-  
+  // observer for sidebar width
   React.useEffect(() => {
     const el = infoSectionRef.current;
     if (!el) return;
@@ -288,7 +288,7 @@ export default function MapScreen() {
     return () => observer.disconnect();
   }, []);
 
-
+  // This effect is used to update the map view when the selected location or post changes
   React.useEffect(() => {
     const map = map_ref.current!;
     if (!map) {
@@ -343,7 +343,7 @@ export default function MapScreen() {
             await new Promise((r) => setTimeout(r, 300));
             again.spiderfy();
           }
-        })();
+        });
       } else {
         if (!bounds.contains(coords)) {
           map.setView(
