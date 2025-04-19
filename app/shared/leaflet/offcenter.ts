@@ -127,36 +127,4 @@ export const Offcenter = {
       zoom,
     );
   },
-  
-  fitBounds: (
-    map: Map,
-    bounds: LatLngBounds,
-    offsets: SafeareaOffsets,
-    extraLeftPadding: number = 0,
-    padding: number = 80,
-  ) => {
-    map.fitBounds(bounds, {
-      paddingTopLeft: [offsets.left + extraLeftPadding, padding],
-      paddingBottomRight: [padding, padding],
-      animate: true,
-    });
-  },
-  
-  fitBoundsIfNeeded: (
-      map: Map,
-      targetBounds: LatLngBounds,
-      offsets: SafeareaOffsets,
-      extraLeftPadding = 0,
-      padding = 80,
-    ) => {
-      const current = Offcenter.getBounds(map, offsets);
-      if (!current.contains(targetBounds)) {
-        map.fitBounds(targetBounds, {
-          paddingTopLeft: [offsets.left + extraLeftPadding, padding],
-          paddingBottomRight: [padding, padding],
-          animate: true,
-        });
-      }
-    }
-  
 };

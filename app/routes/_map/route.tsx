@@ -268,10 +268,7 @@ export default function MapScreen() {
   const open_pcs = open_pcs_1 ?? open_pcs_2 ?? open_pcs_3 ?? ({} as any);
 
   const infoSectionRef = React.useRef<HTMLDivElement>(null);
-  const didInitialRecenter = React.useRef(false);
 
-
-  const [sidebarReady, setSidebarReady] = React.useState(false);
   const [sidebarWidth, setSidebarWidth] = React.useState(0);
   
   React.useEffect(() => {
@@ -282,8 +279,6 @@ export default function MapScreen() {
       const width = el.getBoundingClientRect().width;
       if (width > 0) {
         setSidebarWidth(width);
-        setSidebarReady(true);
-        console.log("✅ Sidebar measured:", width);
       }
     };
   
@@ -297,7 +292,6 @@ export default function MapScreen() {
   React.useEffect(() => {
     const map = map_ref.current!;
     if (!map) {
-      console.warn("⛔ map_ref.current is null, skipping recenter");
       return;
     }
   
